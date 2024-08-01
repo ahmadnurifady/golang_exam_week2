@@ -1,8 +1,11 @@
 package repository
 
 import (
+	"database/sql"
 	"excercise2/internal/domain"
 	"fmt"
+
+	"github.com/rs/zerolog/log"
 )
 
 type RepositoryUser interface {
@@ -13,7 +16,7 @@ type RepositoryUser interface {
 }
 
 type CreateUser interface {
-	Create(request *domain.User) (*domain.User, error)
+	Create(request domain.User) (domain.User, error)
 }
 
 type FindAllUser interface {
@@ -21,7 +24,7 @@ type FindAllUser interface {
 }
 
 type FindByIdUser interface {
-	FindById(userId string) (domain.User, error)
+	FindById(tx *sql.Tx, userId string) (domain.User, error)
 }
 
 type FindByNameUser interface {
@@ -29,46 +32,57 @@ type FindByNameUser interface {
 }
 
 type repositoryUser struct {
-	db map[string]domain.User
+	db       map[string]domain.User
+	database *sql.DB
 }
 
 // Create implements RepositoryUser.
-func (repo *repositoryUser) Create(request *domain.User) (*domain.User, error) {
+func (repo *repositoryUser) Create(request domain.User) (domain.User, error) {
 	var user domain.User
-	user.Id = request.Id
-	user.Name = request.Name
 
-	repo.db[request.Id] = user
-	return request, nil
+	err := repo.database.QueryRow("INSERT INTO users (id, name) VALUES ($1, $2)", request.Id, request.Name).Scan(&user.Id, &user.Name)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
 }
 
 // FindAll implements RepositoryUser.
 func (repo *repositoryUser) FindAll() ([]domain.User, error) {
 	var allUsers []domain.User
 
-	for _, user := range repo.db {
+	rows, err := repo.database.Query("SELECT id, name FROM users")
+	if err != nil {
+		return []domain.User{}, err
+	}
+
+	for rows.Next() {
+		var user domain.User
+		err := rows.Scan(&user.Id, &user.Name)
+		if err != nil {
+			return []domain.User{}, err
+		}
 		allUsers = append(allUsers, user)
 	}
 
 	return allUsers, nil
+
 }
 
 // FindById implements RepositoryUser.
-func (repo *repositoryUser) FindById(userId string) (domain.User, error) {
+func (repo *repositoryUser) FindById(tx *sql.Tx, userId string) (domain.User, error) {
 
-	var findUser domain.User
+	var user domain.User
 
-	if _, exist := repo.db[userId]; !exist {
-		return domain.User{}, fmt.Errorf("user dengan id: %s tidak ditemukan", userId)
+	err := tx.QueryRow("SELECT id , name FROM users WHERE id = $1", userId).Scan(&user.Id, &user.Name)
+	if err != nil {
+
+		log.Info().Any("ERROR at [REPOSITORY] - [USER] - [FindById] - [get data from database]", err).Msg("")
+
+		return domain.User{}, err
 	}
 
-	for _, user := range repo.db {
-		if user.Id == userId {
-			findUser = user
-		}
-	}
-
-	return findUser, nil
+	return user, nil
 
 }
 
@@ -89,8 +103,9 @@ func (repo *repositoryUser) FindByName(userName string) (domain.User, error) {
 	return findUser, nil
 }
 
-func NewRepositoryUser() RepositoryUser {
+func NewRepositoryUser(database *sql.DB) RepositoryUser {
 	return &repositoryUser{
-		db: make(map[string]domain.User),
+		db:       make(map[string]domain.User),
+		database: database,
 	}
 }

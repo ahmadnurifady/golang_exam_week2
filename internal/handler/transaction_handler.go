@@ -1,32 +1,34 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"excercise2/internal/domain/dto"
 	"excercise2/internal/usecase"
 	"net/http"
-	"time"
 
 	"github.com/benebobaa/valo"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
 
 type HandlerTransaction interface {
-	CreateTxHandler(w http.ResponseWriter, r *http.Request)
-	FindAllHandler(w http.ResponseWriter, r *http.Request)
+	CreateTxHandler(ctx *gin.Context)
+	FindAllHandler(ctx *gin.Context)
+
+	Route()
 }
 
 type handlerTransaction struct {
 	uc usecase.UsecaseTransaction
+	rg *gin.RouterGroup
 }
 
 // CreateTxHandler implements HandlerTransaction.
-func (h *handlerTransaction) CreateTxHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func (h *handlerTransaction) CreateTxHandler(ctx *gin.Context) {
+	w := ctx.Writer
+	r := ctx.Request
 
-	kontek := context.WithValue(r.Context(), "key-time", time.Now())
-	log.Info().Any("Time Context Start ==", kontek.Value("key-time")).Msg("")
+	w.Header().Set("Content-Type", "application/json")
 
 	var tx dto.CreateTxDto
 
@@ -64,7 +66,7 @@ func (h *handlerTransaction) CreateTxHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	createTx, err := h.uc.CreateUsecase(tx)
+	createTx, err := h.uc.CreateUsecase(ctx, tx)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Error().Any("Error In start create TX [CreateTxHandler]", err.Error()).Msg("")
@@ -97,8 +99,12 @@ func (h *handlerTransaction) CreateTxHandler(w http.ResponseWriter, r *http.Requ
 }
 
 // FindAllHandler implements HandlerTransaction.
-func (h *handlerTransaction) FindAllHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handlerTransaction) FindAllHandler(ctx *gin.Context) {
+	w := ctx.Writer
+	r := ctx.Request
+
 	w.Header().Set("Content-Type", "application/json")
+	// ctx := context.Background()
 
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -108,7 +114,7 @@ func (h *handlerTransaction) FindAllHandler(w http.ResponseWriter, r *http.Reque
 		})
 	}
 
-	allTx, err := h.uc.FindAllUsecase()
+	allTx, err := h.uc.FindAllUsecase(ctx)
 	if err != nil {
 		w.WriteHeader(http.StatusBadGateway)
 
@@ -138,8 +144,15 @@ func (h *handlerTransaction) FindAllHandler(w http.ResponseWriter, r *http.Reque
 
 }
 
-func NewHandlerTransaction(uc usecase.UsecaseTransaction) HandlerTransaction {
+func (h *handlerTransaction) Route() {
+	tg := h.rg.Group("/tx")
+	tg.POST("/create", h.CreateTxHandler)
+	tg.GET("/find-all", h.FindAllHandler)
+}
+
+func NewHandlerTransaction(uc usecase.UsecaseTransaction, rg *gin.RouterGroup) HandlerTransaction {
 	return &handlerTransaction{
 		uc: uc,
+		rg: rg,
 	}
 }

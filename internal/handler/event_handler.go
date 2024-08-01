@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/benebobaa/valo"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
 
@@ -16,28 +17,34 @@ type HandlerEvent interface {
 	HandlerCreateEvent
 	HandlerFindAllEvent
 	HandlerFindByIdEvent
+
+	Route()
 }
 
 type HandlerCreateEvent interface {
-	CreateEventHandler(w http.ResponseWriter, r *http.Request)
+	CreateEventHandler(ctx *gin.Context)
 }
 
 type HandlerFindAllEvent interface {
-	FindAllEventHandler(w http.ResponseWriter, r *http.Request)
+	FindAllEventHandler(ctx *gin.Context)
 }
 
 type HandlerFindByIdEvent interface {
-	FindByIdEventHandler(w http.ResponseWriter, r *http.Request)
+	FindByIdEventHandler(ctx *gin.Context)
 }
 
 type handlerEvent struct {
 	uc usecase.UsecaseEvent
+	rg *gin.RouterGroup
 }
 
 // Create implements HandlerEvent.
-func (h *handlerEvent) CreateEventHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handlerEvent) CreateEventHandler(ctx *gin.Context) {
+	w := ctx.Writer
+	r := ctx.Request
 	w.Header().Set("Content-Type", "application/json")
 	var event domain.Event
+	// ctx := context.Background()
 
 	err := json.NewDecoder(r.Body).Decode(&event)
 	if err != nil {
@@ -65,7 +72,9 @@ func (h *handlerEvent) CreateEventHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	createEvent, err := h.uc.Create(&event)
+	fmt.Println(event)
+
+	createEvent, err := h.uc.Create(ctx, event)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Info().Any("Error In start create event [CreateEventHandler]", err.Error()).Msg("")
@@ -74,13 +83,18 @@ func (h *handlerEvent) CreateEventHandler(w http.ResponseWriter, r *http.Request
 			StatusCode: http.StatusBadRequest,
 			Message:    err.Error(),
 		})
+		return
 
 	}
 
 	log.Info().Msg("[CreateEventHandler]-[SUCCESS]")
 	fmt.Println("CHECKING DATA CREATE ==", createEvent)
 
-	err = json.NewEncoder(w).Encode(createEvent)
+	err = json.NewEncoder(w).Encode(dto.BaseResponse{
+		StatusCode: http.StatusCreated,
+		Message:    "SUCCESS - CREATE - EVENT",
+		Data:       createEvent,
+	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Info().Any("Error In encode create event [CreateEventHandler]", err.Error()).Msg("")
@@ -93,13 +107,16 @@ func (h *handlerEvent) CreateEventHandler(w http.ResponseWriter, r *http.Request
 }
 
 // FindAll implements HandlerEvent.
-func (h *handlerEvent) FindAllEventHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handlerEvent) FindAllEventHandler(ctx *gin.Context) {
+	w := ctx.Writer
+	// r := ctx.Request
+
 	w.Header().Set("Content-Type", "application/json")
 
-	allEvents, err := h.uc.FindAll()
+	allEvents, err := h.uc.FindAll(ctx)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		log.Info().Any("Error In start findAll event [FindAllEventHandler]", err.Error()).Msg("")
+		log.Info().Any("ERROR at [HANDLER] - [EVENT] - [FindAllEventHandler] - [get data from usecase event findAll]", err).Msg("")
 
 		json.NewEncoder(w).Encode(dto.BaseResponse{
 			StatusCode: http.StatusBadRequest,
@@ -109,7 +126,11 @@ func (h *handlerEvent) FindAllEventHandler(w http.ResponseWriter, r *http.Reques
 	}
 	log.Info().Interface("data after find all events==", allEvents).Msg("")
 
-	err = json.NewEncoder(w).Encode(allEvents)
+	err = json.NewEncoder(w).Encode(dto.BaseResponse{
+		StatusCode: http.StatusOK,
+		Message:    "SUCCESS - FIND ALL - EVENT",
+		Data:       allEvents,
+	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Info().Any("Error In encode create event [FindAllEventHandler]", err.Error()).Msg("")
@@ -120,10 +141,14 @@ func (h *handlerEvent) FindAllEventHandler(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
+	log.Info().Any("SUCCESS at [HANDLER] - [EVENT] - [FindAllEventHandler] - []", err).Msg("")
+
 }
 
 // FindById implements HandlerEvent.
-func (h *handlerEvent) FindByIdEventHandler(w http.ResponseWriter, r *http.Request) {
+func (h *handlerEvent) FindByIdEventHandler(ctx *gin.Context) {
+	w := ctx.Writer
+	r := ctx.Request
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -140,7 +165,7 @@ func (h *handlerEvent) FindByIdEventHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	findById, err := h.uc.FindById(idEvent)
+	findById, err := h.uc.FindById(ctx, idEvent)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 
@@ -152,7 +177,11 @@ func (h *handlerEvent) FindByIdEventHandler(w http.ResponseWriter, r *http.Reque
 		return
 
 	}
-	err = json.NewEncoder(w).Encode(findById)
+	err = json.NewEncoder(w).Encode(dto.BaseResponse{
+		StatusCode: http.StatusOK,
+		Message:    "SUCCESS - FIND BY ID - EVENT",
+		Data:       findById,
+	})
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Error().Any("Error In encode findById event [FindByIdEventHandler]", err.Error()).Msg("")
@@ -166,6 +195,16 @@ func (h *handlerEvent) FindByIdEventHandler(w http.ResponseWriter, r *http.Reque
 
 }
 
-func NewHandlerEvent(uc usecase.UsecaseEvent) HandlerEvent {
-	return &handlerEvent{uc: uc}
+func (h *handlerEvent) Route() {
+	eg := h.rg.Group("/event")
+	eg.POST("/create", h.CreateEventHandler)
+	eg.GET("/find-all", h.FindAllEventHandler)
+	eg.GET("/find-by-id", h.FindByIdEventHandler)
+}
+
+func NewHandlerEvent(uc usecase.UsecaseEvent, rg *gin.RouterGroup) HandlerEvent {
+	return &handlerEvent{
+		uc: uc,
+		rg: rg,
+	}
 }
