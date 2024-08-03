@@ -50,6 +50,7 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 	}()
 
 	var idAllEvent []string
+	var allTicket []domain.Ticket
 
 	for _, tkt := range request.Ticket {
 		uuidGenerate, _ := uuid.NewV4()
@@ -61,6 +62,7 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 			return domain.Event{}, err
 		}
 		idAllEvent = append(idAllEvent, tkt.Id)
+		allTicket = append(allTicket, tkt)
 	}
 
 	result, err := uc.repo.Create(tx, ctx, domain.Event{
@@ -86,7 +88,7 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 			return domain.Event{}, err
 		}
 	}
-	result.Ticket = request.Ticket
+	result.Ticket = allTicket
 
 	err = tx.Commit()
 	if err != nil {
@@ -142,7 +144,32 @@ func (uc *usecaseEvent) FindAll(ctx context.Context) ([]domain.Event, error) {
 // FindById implements UsecaseEvent.
 func (uc *usecaseEvent) FindById(ctx context.Context, eventId string) (domain.Event, error) {
 
-	return domain.Event{}, nil
+	tx, err := uc.database.Begin()
+	if err != nil {
+		log.Info().Any("ERROR at [USECASE] - [EVENT] - [FindById] - [tx begin]", err).Msg("")
+		return domain.Event{}, err
+	}
+
+	defer func() {
+		if err != nil {
+			log.Info().Any("ERROR at [USECASE] - [EVENT] - [FindById] - [ROLLBACK]", err).Msg("")
+			tx.Rollback()
+		}
+	}()
+
+	response, err := uc.repo.FindById(tx, ctx, eventId)
+	if err != nil {
+		return domain.Event{}, err
+	}
+
+	findTicket, err := uc.repoTicket.FindByEventName(tx, response.EventName)
+	if err != nil {
+		return domain.Event{}, err
+	}
+
+	response.Ticket = findTicket
+
+	return response, nil
 
 }
 
