@@ -2,16 +2,13 @@ package helper
 
 import (
 	"excercise2/internal/domain"
-	"excercise2/internal/repository"
-	"excercise2/internal/usecase"
+	"excercise2/internal/provider/manager"
 )
 
-func Init(
-	repoUser repository.RepositoryUser,
-	repoEvent repository.RepositoryEvent,
-	repoTx repository.RepositoryTransaction,
-	ucTx usecase.UsecaseTransaction,
-) {
+func Init() {
+	var repo manager.RepoManager
+	// var uc manager.UsecaseManager
+	// var h handler.HandlerTransaction
 	// wg := sync.WaitGroup{}
 
 	allusers := []domain.User{{
@@ -26,7 +23,7 @@ func Init(
 	}}
 
 	for _, user := range allusers {
-		repoUser.Create(user)
+		repo.UserRepo().Create(user)
 	}
 
 	// allEvent := []domain.Event{
@@ -62,7 +59,7 @@ func Init(
 	// 	// wg.Add(1)
 	// 	// go func() {
 	// 	// defer wg.Done()
-	// 	ucTx.CreateUsecase(dto.CreateTxDto{
+	// 	h.CreateTxHandler(dto.CreateTxDto{
 	// 		UserId:     "USR-001",
 	// 		EventId:    "event-001",
 	// 		TicketType: "CAT 1",

@@ -6,7 +6,15 @@ import (
 )
 
 type CompositeEventTicket interface {
+	CreateComposite
+	FindByIdComposite
+}
+
+type CreateComposite interface {
 	CreateComposite(tx *sql.Tx, request domain.EventTicket) (domain.EventTicket, error)
+}
+
+type FindByIdComposite interface {
 	FindByIdComposite(eventTicketId string) (domain.EventTicket, error)
 }
 

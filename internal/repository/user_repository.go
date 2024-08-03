@@ -3,7 +3,6 @@ package repository
 import (
 	"database/sql"
 	"excercise2/internal/domain"
-	"fmt"
 
 	"github.com/rs/zerolog/log"
 )
@@ -12,7 +11,6 @@ type RepositoryUser interface {
 	CreateUser
 	FindAllUser
 	FindByIdUser
-	FindByNameUser
 }
 
 type CreateUser interface {
@@ -27,12 +25,7 @@ type FindByIdUser interface {
 	FindById(tx *sql.Tx, userId string) (domain.User, error)
 }
 
-type FindByNameUser interface {
-	FindByName(userName string) (domain.User, error)
-}
-
 type repositoryUser struct {
-	db       map[string]domain.User
 	database *sql.DB
 }
 
@@ -86,26 +79,8 @@ func (repo *repositoryUser) FindById(tx *sql.Tx, userId string) (domain.User, er
 
 }
 
-// FindByName implements RepositoryUser.
-func (repo *repositoryUser) FindByName(userName string) (domain.User, error) {
-	var findUser domain.User
-
-	for _, user := range repo.db {
-		if user.Name == userName {
-			findUser = user
-		}
-	}
-
-	if findUser.Id == "" || findUser.Name == "" {
-		return domain.User{}, fmt.Errorf("user dengan name: %s tidak ditemukan", userName)
-	}
-
-	return findUser, nil
-}
-
 func NewRepositoryUser(database *sql.DB) RepositoryUser {
 	return &repositoryUser{
-		db:       make(map[string]domain.User),
 		database: database,
 	}
 }

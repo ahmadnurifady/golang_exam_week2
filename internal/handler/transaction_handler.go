@@ -14,6 +14,7 @@ import (
 type HandlerTransaction interface {
 	CreateTxHandler(ctx *gin.Context)
 	FindAllHandler(ctx *gin.Context)
+	CreateManyTxHandler(ctx *gin.Context)
 
 	Route()
 }
@@ -21,6 +22,81 @@ type HandlerTransaction interface {
 type handlerTransaction struct {
 	uc usecase.UsecaseTransaction
 	rg *gin.RouterGroup
+}
+
+// CreateManyTxHandler implements HandlerTransaction.
+func (h *handlerTransaction) CreateManyTxHandler(ctx *gin.Context) {
+	w := ctx.Writer
+	r := ctx.Request
+
+	w.Header().Set("Content-Type", "application/json")
+
+	var requestTx dto.CreateManyTxDto
+
+	if r.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(dto.BaseResponse{
+			StatusCode: http.StatusMethodNotAllowed,
+			Message:    "Status Method Not Allowed",
+		})
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&requestTx)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+
+		log.Error().Any("Error In Decode [CreateManyTxHandler]", err.Error()).Msg("")
+
+		json.NewEncoder(w).Encode(dto.BaseResponse{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		})
+		return
+	}
+
+	err = valo.Validate(requestTx)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+
+		log.Error().Any("error validate [CreateManyTxHandler]", err.Error()).Msg("")
+
+		json.NewEncoder(w).Encode(dto.BaseResponse{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		})
+		return
+	}
+
+	createTx, err := h.uc.UsecaseCreateManyTransaction(ctx, requestTx)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Error().Any("Error In start create TX [CreateManyTxHandler]", err.Error()).Msg("")
+
+		json.NewEncoder(w).Encode(dto.BaseResponse{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		})
+		return
+	}
+
+	log.Info().Any("SUCCESS", "[SUCCESS] - [CREATE] - [TX] - [CreateManyTxHandler]").Msg("")
+
+	err = json.NewEncoder(w).Encode(dto.BaseResponse{
+		StatusCode: http.StatusCreated,
+		Message:    "SUCCESS-CREATE-TX",
+		Data:       createTx,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Error().Any("Error In encode create TX [CreateManyTxHandler]", err.Error()).Msg("")
+
+		json.NewEncoder(w).Encode(dto.BaseResponse{
+			StatusCode: http.StatusBadRequest,
+			Message:    err.Error(),
+		})
+		return
+	}
+
 }
 
 // CreateTxHandler implements HandlerTransaction.
@@ -147,6 +223,7 @@ func (h *handlerTransaction) FindAllHandler(ctx *gin.Context) {
 func (h *handlerTransaction) Route() {
 	tg := h.rg.Group("/tx")
 	tg.POST("/create", h.CreateTxHandler)
+	tg.POST("/create-many-tx", h.CreateManyTxHandler)
 	tg.GET("/find-all", h.FindAllHandler)
 }
 

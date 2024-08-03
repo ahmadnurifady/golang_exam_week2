@@ -17,6 +17,12 @@ import (
 type UsecaseTransaction interface {
 	UsecaseCreateTransaction
 	UsecaseFindAllTransaction
+
+	UsecaseCreateManyTransaction
+}
+
+type UsecaseCreateManyTransaction interface {
+	UsecaseCreateManyTransaction(ctx context.Context, request dto.CreateManyTxDto) ([]domain.Transaction, error)
 }
 
 type UsecaseCreateTransaction interface {
@@ -34,6 +40,86 @@ type usecaseTransaction struct {
 	repoTicket repository.RepositoryTicket
 	sync.WaitGroup
 	database *sql.DB
+}
+
+// UsecaseCreateManyTransaction implements UsecaseTransaction.
+func (uc *usecaseTransaction) UsecaseCreateManyTransaction(ctx context.Context, request dto.CreateManyTxDto) ([]domain.Transaction, error) {
+	tx, err := uc.database.Begin()
+	if err != nil {
+		return []domain.Transaction{}, err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var bucketTransaction []domain.Transaction
+
+	user, err := uc.repoUser.FindById(tx, request.UserId)
+	if err != nil {
+		log.Info().Any("ERROR at [USECASE] - [TRANSACTION] - [UsecaseCreateManyTransaction] - [get data user from user repo]", err).Msg("")
+		return []domain.Transaction{}, err
+	}
+
+	for _, eventFromRequest := range request.RequestEventTicket {
+		findEvent, err := uc.repoEvent.FindById(tx, ctx, eventFromRequest.EventId)
+		if err != nil {
+			log.Info().Any("ERROR at [USECASE] - [TRANSACTION] - [UsecaseCreateManyTransaction] - [get data event from event repo]", err).Msg("")
+			return []domain.Transaction{}, err
+		}
+
+		for _, ticketFromRequest := range eventFromRequest.Ticket {
+			findTicket, err := uc.repoTicket.FindByEventName(tx, findEvent.EventName)
+			if err != nil {
+				log.Info().Any("ERROR at [USECASE] - [TRANSACTION] - [UsecaseCreateManyTransaction] - [get data ticket from ticket repo]", err).Msg("")
+				return []domain.Transaction{}, err
+			}
+
+			for _, ticket := range findTicket {
+				if ticketFromRequest.TicketType == ticket.Type {
+					for i := 1; i <= ticketFromRequest.StockRequest; i++ {
+
+						uuidGenerate, _ := uuid.NewV4()
+
+						transaction := domain.Transaction{
+							Id:        uuidGenerate.String(),
+							User:      user,
+							Event:     findEvent,
+							Ticket:    ticket,
+							Create_at: time.Now(),
+							Update_at: time.Now(),
+						}
+
+						_, err := uc.repo.CreateTransactionWithTx(ctx, tx, transaction)
+						if err != nil {
+							log.Info().Any("ERROR at [USECASE] - [TRANSACTION] - [UsecaseCreateManyTransaction] - [failed create data transaction]", err).Msg("")
+							return []domain.Transaction{}, err
+						}
+
+						bucketTransaction = append(bucketTransaction, transaction)
+					}
+
+					_, err := uc.repoTicket.UpdateStockNotOne(tx, ticket.Id, ticketFromRequest.StockRequest)
+					if err != nil {
+						log.Info().Any("ERROR at [USECASE] - [TRANSACTION] - [UsecaseCreateManyTransaction] - [failed update data ticket]", err).Msg("")
+						return []domain.Transaction{}, err
+					}
+
+				}
+			}
+
+		}
+
+	}
+	err = tx.Commit()
+	if err != nil {
+		return []domain.Transaction{}, err
+	}
+
+	return bucketTransaction, nil
+
 }
 
 // CreateUsecase implements UsecaseTransaction.

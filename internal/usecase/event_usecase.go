@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"excercise2/internal/domain"
 	"excercise2/internal/repository"
-	"fmt"
 
 	"github.com/gofrs/uuid"
 	"github.com/rs/zerolog/log"
@@ -50,8 +49,6 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 		}
 	}()
 
-	fmt.Println("START - CREATE - EVENT")
-
 	var idAllEvent []string
 
 	for _, tkt := range request.Ticket {
@@ -65,8 +62,6 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 		}
 		idAllEvent = append(idAllEvent, tkt.Id)
 	}
-	fmt.Println("FINISH - CREATE - TICKET")
-	fmt.Println("all id ticket", idAllEvent)
 
 	result, err := uc.repo.Create(tx, ctx, domain.Event{
 		Id:        request.Id,
@@ -78,7 +73,6 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 		log.Info().Any("Error In [USECASE] start create EVENT [Create]", err.Error()).Msg("")
 		return domain.Event{}, err
 	}
-	fmt.Println("FINISH - CREATE - EVENT")
 
 	for _, idEvent := range idAllEvent {
 		uuidGenerate, _ := uuid.NewV4()
@@ -92,7 +86,6 @@ func (uc *usecaseEvent) Create(ctx context.Context, request domain.Event) (domai
 			return domain.Event{}, err
 		}
 	}
-	fmt.Println("FINISH - CREATE - COMPOSITE")
 	result.Ticket = request.Ticket
 
 	err = tx.Commit()
@@ -133,7 +126,6 @@ func (uc *usecaseEvent) FindAll(ctx context.Context) ([]domain.Event, error) {
 			log.Info().Any("ERROR at [USECASE] - [EVENT] - [FindAll] - [get data from repo ticket findByEventName]", err).Msg("")
 			return []domain.Event{}, err
 		}
-		fmt.Println("allticket == ", allTicket)
 		event.Ticket = allTicket
 		allEventWithTicket = append(allEventWithTicket, event)
 	}
@@ -149,11 +141,6 @@ func (uc *usecaseEvent) FindAll(ctx context.Context) ([]domain.Event, error) {
 
 // FindById implements UsecaseEvent.
 func (uc *usecaseEvent) FindById(ctx context.Context, eventId string) (domain.Event, error) {
-	// result, err := uc.repo.FindById(ctx, eventId)
-	// if err != nil {
-	// 	return domain.Event{}, err
-	// }
-	// return result, nil
 
 	return domain.Event{}, nil
 

@@ -38,6 +38,7 @@ func NewServer() *Server {
 
 	repo := manager.NewRepoManager(db)
 	uc := manager.NewUcManager(repo, db)
+	// gin.SetMode()
 	engine := gin.Default()
 	return &Server{uc: uc, engine: engine, host: ":8080"}
 }

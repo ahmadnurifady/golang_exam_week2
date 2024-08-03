@@ -182,6 +182,7 @@ func (h *handlerEvent) FindByIdEventHandler(ctx *gin.Context) {
 		Message:    "SUCCESS - FIND BY ID - EVENT",
 		Data:       findById,
 	})
+
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		log.Error().Any("Error In encode findById event [FindByIdEventHandler]", err.Error()).Msg("")
